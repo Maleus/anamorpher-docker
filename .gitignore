@@ -69,3 +69,4 @@ backend/adversarial_generators/decoy_images/*
 
 # UV
 .uv/
+.python-version

@@ -45,6 +45,20 @@ uv run python backend/app.py
 
 > Windows: Use [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) due to TensorFlow dependencies.
 
+## Docker (Windows)
+
+Build the image:
+```bash
+docker build -t anamorpher .
+```
+
+Run the container:
+```bash
+docker run --rm -p 5000:5000 anamorpher
+```
+
+Then open `frontend/index.html` from the repo on your Windows host.
+
 ## Warnings and Known Limitations
 
 -  Due to the probabilistic nature of these systems, results may vary. For consistent evaluation, run each example 5 times.

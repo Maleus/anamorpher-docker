@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 import numpy as np
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 from sanitizer import (
@@ -21,15 +21,22 @@ from sanitizer import (
 )
 
 # Configuration
-DECOY_IMAGES_DIR = os.getenv("DECOY_IMAGES_DIR", "adversarial_generators/decoy_images")
+BASE_DIR = os.path.dirname(__file__)
+DECOY_IMAGES_DIR = os.getenv(
+    "DECOY_IMAGES_DIR",
+    os.path.join(BASE_DIR, "adversarial_generators", "decoy_images"),
+)
 BICUBIC_SCRIPT_PATH = os.getenv(
-    "BICUBIC_SCRIPT_PATH", "adversarial_generators/bicubic_gen_payload.py"
+    "BICUBIC_SCRIPT_PATH",
+    os.path.join(BASE_DIR, "adversarial_generators", "bicubic_gen_payload.py"),
 )
 NEAREST_SCRIPT_PATH = os.getenv(
-    "NEAREST_SCRIPT_PATH", "adversarial_generators/nearest_gen_payload.py"
+    "NEAREST_SCRIPT_PATH",
+    os.path.join(BASE_DIR, "adversarial_generators", "nearest_gen_payload.py"),
 )
 BILINEAR_SCRIPT_PATH = os.getenv(
-    "BILINEAR_SCRIPT_PATH", "adversarial_generators/bilinear_gen_payload.py"
+    "BILINEAR_SCRIPT_PATH",
+    os.path.join(BASE_DIR, "adversarial_generators", "bilinear_gen_payload.py"),
 )
 
 from downsamplers import (  # noqa: E402
@@ -42,6 +49,9 @@ from downsamplers import (  # noqa: E402
 app = Flask(__name__)
 CORS(app)
 
+# Frontend assets live in ../frontend relative to this file.
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
 # Initialize downsamplers
 downsamplers = {
     "opencv": OpenCVDownsampler(),
@@ -52,6 +62,19 @@ downsamplers = {
 
 # Supported target resolutions
 TARGET_RESOLUTIONS = {"1092x1092": (1092, 1092), "800x800": (800, 800)}
+
+
+@app.route("/", methods=["GET"])
+def serve_frontend_index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/<path:filename>", methods=["GET"])
+def serve_frontend_assets(filename: str):
+    candidate = os.path.join(FRONTEND_DIR, filename)
+    if os.path.isfile(candidate):
+        return send_from_directory(FRONTEND_DIR, filename)
+    abort(404)
 
 
 def image_to_base64(image: np.ndarray) -> str:
@@ -393,7 +416,7 @@ def get_available_decoy_images():
 def get_demo_images():
     """Get available demo images for downsampling"""
     try:
-        demo_dir = os.path.abspath("demo_images")
+        demo_dir = os.path.join(BASE_DIR, "demo_images")
         if not os.path.exists(demo_dir):
             return jsonify([])
 
@@ -442,7 +465,7 @@ def get_demo_image(filename):
     try:
         # Sanitize filename
         safe_filename = sanitize_filename(filename)
-        demo_dir = os.path.abspath("demo_images")
+        demo_dir = os.path.join(BASE_DIR, "demo_images")
         file_path = os.path.join(demo_dir, safe_filename)
 
         # Validate path is safe and within demo directory
@@ -589,7 +612,7 @@ def generate_adversarial():
             shutil.copy2(decoy_info["path"], decoy_path)
 
             # Choose the appropriate script with path validation
-            base_script_dir = os.path.abspath("adversarial_generators")
+            base_script_dir = os.path.join(BASE_DIR, "adversarial_generators")
 
             if method == "bicubic":
                 script_path = validate_safe_path(BICUBIC_SCRIPT_PATH, base_script_dir)
@@ -717,4 +740,5 @@ if __name__ == "__main__":
     print("Starting Anamorpher backend...")
     print("Available downsamplers:", list(downsamplers.keys()))
     print("Supported resolutions:", list(TARGET_RESOLUTIONS.keys()))
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    debug = os.getenv("ANAMORPHER_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
+    app.run(debug=debug, host="0.0.0.0", port=5000)
